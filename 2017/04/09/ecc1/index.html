@@ -1,0 +1,196 @@
+<!DOCTYPE html><html lang="zh-cn"><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=Edge"><meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no"><meta name="format-detection" content="telephone=no"><meta name="format-detection" content="email=no"><meta name="description"><meta name="keywords" content="Hexo, Gruntjs, Nodejs, Reactjs, Vuejs"><title>椭圆密码加密简介（一） - This is a Blog!</title><link rel="stylesheet" href="/css/main_style.min.css"><link rel="icon" href="/apple.ico"></head><body><input id="navi" type="checkbox"><ul class="main-navication"><li><a href="/"><span>Home</span></a></li><li><a href="https://github.com"><span>Github</span></a></li><li><a href="https://www.v2ex.com/"><span>V2EX</span></a></li></ul><div class="wrapper" id="wrap"><div class="post-header"><label class="navi-button" for="navi">MENU</label><img class="background" src="http://callfiles.ueibo.com/hexo-theme-laughing/post_background.jpg"><div class="post-title"><h1 class="title">椭圆密码加密简介（一）</h1><ul class="meta"><li><i class="icon icon-author"></i>Canymebee</li><li><i class="icon icon-clock"></i>25 Minutes</li><li><i class="icon icon-calendar"></i>2017年4月9日</li></ul></div></div><div class="article-content" style="max-width:800px"><script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    extensions: ["tex2jax.js", "content-mathml.js"],
+    jax: ["input/TeX", "output/HTML-CSS"],
+    tex2jax: {
+      <!--$表示行内元素，$$表示块状元素 -->
+      inlineMath: [ ['$','$'], ["\\(","\\)"] ],
+      displayMath: [ ['$$','$$'], ["\\[","\\]"] ],
+      processEscapes: true
+    },
+    "HTML-CSS": { availableFonts: ["TeX"] }
+  });
+</script>
+<!--加载MathJax的最新文件， async表示异步加载进来 -->
+<script type="text/javascript" async src="https://cdn.mathjax.org/mathjax/latest/MathJax.js">
+</script>
+
+
+<p></p><h1>椭圆密码加密简介（一）</h1><br>翻译自<a href="http://andrea.corbellini.name/2015/05/17/elliptic-curve-cryptography-a-gentle-introduction/" target="_blank" rel="external">这篇博客</a><p></p>
+<p>了解公钥算法的人应该已经听说过ECC、ECDH或者ECDSA了。其中ECC是Elliptic Curve Cryptography——椭圆加密的首字母缩写。</p>
+<p>如今，我们可以在诸如TLS、PGP和SSH这些现代互联网和IT技术的基石中看到椭圆加密系统的身影，更不用说比特币和其它基于密码学的电子货币。</p>
+<p>在ECC火起来之前，几乎所有的公钥算法都是基于RSA、DSA和DH这些以指数计算为基础的加密系统。RSA这一系列算法如今依然非常重要，而且还经常和ECC一起使用。然而，RSA加密背后的原理比较容易理解，并且随着普及越来越为大众所知，实现起来也挺快；相比之下ECC背后的原理就不那么为人所知了。</p>
+<p>在接下来的几篇博客中我将简单介绍ECC。我的目的不是呈现一个完整而详细的ECC说明，而是<strong>简单的总结ECC的本质，并说清楚它为什么会被认为是相对更加安全的算法</strong>。同时我会<strong>提供几个可视化的小工具来帮助理解算法</strong>。</p>
+<p>以下是我将会涉及的内容：</p>
+<p>1.<a href="http://andrea.corbellini.name/2015/05/17/elliptic-curve-cryptography-a-gentle-introduction/" target="_blank" rel="external">Elliptic curves over real numbers and the group law (就是本文)</a></p>
+<p>2.<a href="http://andrea.corbellini.name/2015/05/23/elliptic-curve-cryptography-finite-fields-and-discrete-logarithms/" target="_blank" rel="external">Elliptic curves over finite fields and the discrete logarithm http://andrea.corbellini.name/images/three-aligned-points.pngproblem</a></p>
+<p>3.<a href="http://andrea.corbellini.name/2015/05/30/elliptic-curve-cryptography-ecdh-and-ecdsa/" target="_blank" rel="external">Key pair generation and two ECC algorithms: ECDH and ECDSA</a></p>
+<p>4.<a href="http://andrea.corbellini.name/2015/06/08/elliptic-curve-cryptography-breaking-security-and-a-comparison-with-rsa/" target="_blank" rel="external">Algorithms for breaking ECC security, and a comparison with RSA</a></p>
+<p>为了能看懂下面的内容，你需要一些集合、几何相关的数学知识，并了解对称和非对称加密（译注：其实还得有点高等数学和离散数学基础）。最后，你需要知道在密码学中什么是“简单”问题，什么是“困难”问题。</p>
+<p>开搞！</p>
+<p><br></p>
+<h2>椭圆曲线</h2>
+
+<p>什么是椭圆曲线？Wolfram MathWorld给出了一个精准的<a href="http://mathworld.wolfram.com/EllipticCurve.html" target="_blank" rel="external">定义</a>。但是我们讨论的将会是<strong>平面上满足如下方程的点的集合</strong>：</p>
+<p>$$<br>y^2 =x^3 + ax + b<br>$$</p>
+<p>并且 $4a^3+27b^2\neq0$<br>（这是为了去掉非平滑曲线）。该方程被称为椭圆曲线的魏尔斯特拉斯一般形式。</p>
+<center><br><img src="http://andrea.corbellini.name/images/curves.png" width="400/"><br><h6><br>椭圆曲线的不同形状，$b=1$，$a$从$2$到$-3$的不同情况<br></h6><br></center>
+
+<center><br><img src="http://andrea.corbellini.name/images/singularities.png" width="400" height="150/"><br><h6><br>非平滑点（奇异点）的情况。左边的曲线有一个尖角（$y^2=x^3$），<br>右边的曲线有一个自交（self-intersection）点（$y^2=x^3-3x+2$）。它们都不是严格的椭圆曲线。<br></h6><br></center>
+
+<p>根据a和b取值的不同，椭圆曲线在平面上呈现的形状也有所变化。很容易证明，这类曲线是以x轴对称的。</p>
+<p>但是为了需要，我们还需要一个无穷远点来作为曲线的一部分。下面我们将把0作为作为曲线上无穷远点的标志。现在曲线的表达式可以写成如下形式：</p>
+<p>$$<br>\lbrace (x,y\in R^2)\  |\ y^2=x^3+ax+b,\ 4a^3+27b^2 \neq 0  \rbrace \cup \lbrace0\rbrace<br>$$</p>
+<p><br></p>
+<h2>群</h2>
+
+<p>在数学中，群（译注：<a href="http://baike.baidu.com/link?url=aJKo4MoQ5wO24d-vhhaq8Era0JFTV6WRj8FOlwbLCosID8s3maoomTdhRd3Lmky6VezkyNJCOBps-F_dqbKje_" target="_blank" rel="external">群的定义</a>）是一个定义了一个二元运算（加法）的集合。并且这种二元运算必须满足以下4条规则：</p>
+<p>1.<strong>封闭性</strong>：如果a和b是群G的元素，那么$a+b$也是群G的元素；</p>
+<p>2.<strong>结合律</strong>：$(a+b)+c = a+(b+c)$；</p>
+<p>3.对于任意元素a，都存在<strong>零元</strong>使得$a+0=0+a=a$成立；</p>
+<p>4.对于任意元素a，都存在对应的<strong>逆元</strong>b使得$a+b=0$；</p>
+<p>如果再加上一个第五条：</p>
+<p>5.<strong>交换律</strong>：$a+b=b+a$；</p>
+<p>那么该群被称为<strong>阿贝尔群</strong>。</p>
+<p>比如，所有整数的集合Z是一个群，并且是一个阿贝尔群。而自然数的集合N不是一个群，因为不满足第4条性质。</p>
+<p>群有很多好处，从上述4条性质中我们可以推出一些其它的性质。例如，<strong>零元和逆元都是唯一</strong>的，也就是说对于任何元素a，有且仅有元素b使得$a+b=0$。这些性质将会在后面用到。</p>
+<p><br></p>
+<h2>椭圆曲线之上的群</h2>
+
+<p>我们可以在椭圆曲线上定义一个群：</p>
+<ul>
+<li>群中的元素是椭圆曲线上的点</li>
+<li><strong>零元</strong>是无穷远点0</li>
+<li>点P的<strong>逆元</strong>是以x轴对称的点</li>
+<li><strong>加法</strong>被定义成如下的规则：对于同一直线上的非零点P、Q和R，有$P+Q+R=0$</li>
+</ul>
+<center><br><img src="http://andrea.corbellini.name/images/three-aligned-points.png" width="400/"><br><h6><br>直线上的3个点的和为0<br></h6><br></center>
+
+<p>需要注意的是，在最后一条规则中我们只定义了三个点，而对点的顺序没有规定。这意味着，如果有$P+Q+R=0$，则有$P+(Q+R)=Q+(P+R)=R+(P+Q)=···=0$。因此我们证明了定义的<strong>这种加法是具有结合律和交换律的，则该群为阿贝尔群</strong>。</p>
+<p>但是我们怎么才能计算两个坐标点的加法呢？</p>
+<p><br></p>
+<h2>几何加法</h2>
+
+<p>由于我们定义的群是一个阿贝尔群，因而可以将$P+Q+R=0$写成$P+Q=-R$。这种形式的等式让我们找到一个几何上的方法来计算点P和点Q的和：<strong>作一条穿过P和Q的直线，与曲线相交于第三点R</strong>（因为定义中，P、Q、R三点共线），<strong>则P+Q的结果就是R的逆元，-R。</strong></p>
+<center><br><img src="http://andrea.corbellini.name/images/point-addition.png" width="400/"><br><h6><br>作直线穿过P和Q，交曲线于R。则P+Q的结果就是与R关于x轴对称的点-R。<br></h6><br></center>
+
+<p>这种计算方法看起来可行，但是还需要一点细化：</p>
+<ul>
+<li><strong>$\textbf{P=0}$或者$\textbf{Q=0}$</strong>的情况。虽然0是无穷远点，无法在平面上绘出，但由于我们定义了0是零元。则对任何P、Q，都有$P+0=P,0+Q=Q$。</li>
+</ul>
+<ul>
+<li><strong>$\textbf{P=-Q}$</strong>的情况。这种情况下，P、Q的连线与x轴垂直，与曲线没有第三个交点。但是由逆元的定义有：$P+Q=P+(-P)=0$。</li>
+<li><strong>$\textbf{P=Q}$</strong>的情况。这时通过P点的直线有无数条，看起来无法确定。但是考虑点$Q’\neq P$，且Q’无线逼近点P的时候，经过P和Q’的直线慢慢变成曲线上P点的切线。此时R是切线与曲线的交点。</li>
+</ul>
+<center><br><img src="http://andrea.corbellini.name/images/animation-point-doubling.gif" width="400/"><br><h6><br>当Q’趋近于P时<br></h6><br></center>
+
+<ul>
+<li><strong>$\mathbf{ P \neq Q} $，且与曲线没有第三个交点</strong>的时候。实际上，这种情况就是穿过P、Q的直线同时与曲线相切的情况。假设P是切点，则有$P+Q=-P$。</li>
+</ul>
+<center><br><img src="http://andrea.corbellini.name/images/animation-tangent-line.gif" width="400/"><br><h6><br>直线PQ与曲线相切时<br></h6><br></center>
+
+<p>至此，这种运算方法是完备的并且覆盖了所有情况。只要能作图，就能画出曲线上所有点的加法的结果。这里有一个<a href="https://cdn.rawgit.com/andreacorbellini/ecc/920b29a/interactive/reals-add.html" target="_blank" rel="external">在线的可视化工具</a>可以帮助你理解这种计算。</p>
+<p><br></p>
+<h2>代数加法</h2>
+
+<p>想要电脑上计算这种加法，我们还是得把几何规则转化为代数的规则。由于直接将上述的方法转化为方程将会涉及解三次方程，所以以下内容的部分过程将略去不表。</p>
+<p>考虑椭圆曲线上的两个一般的**非零、非对称点</p>
+<math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <mi>P</mi><br>  <mo>=</mo><br>  <mo stretchy="false">(</mo><br>  <msub><br>    <mi>x</mi><br>    <mi>P</mi><br>  </msub><br>  <mo>,</mo><br>  <msub><br>    <mi>y</mi><br>    <mi>P</mi><br>  </msub><br>  <mo stretchy="false">)</mo><br></math><br>和<br><math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <mi>Q</mi><br>  <mo>=</mo><br>  <mo stretchy="false">(</mo><br>  <msub><br>    <mi>x</mi><br>    <mi>Q</mi><br>  </msub><br>  <mo>,</mo><br>  <msub><br>    <mi>y</mi><br>    <mi>Q</mi><br>  </msub><br>  <mo stretchy="false">)</mo><br></math><strong>。<br><br>如果P、Q两点不重合，
+</strong><math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <msub><br>    <mi>x</mi><br>    <mi>P</mi><br>  </msub><br>  <mo>≠</mo><br>  <msub><br>    <mi>x</mi><br>    <mi>Q</mi><br>  </msub><br></math><strong>，则通过P、Q的直线的</strong>斜率<strong>m为：<br><br><center><br><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><br>  <mi>m</mi><br>  <mo>=</mo><br>  <mfrac><br>    <mrow><br>      <msub><br>        <mi>y</mi><br>        <mi>P</mi><br>      </msub><br>      <mo>-</mo><br>      <msub><br>        <mi>y</mi><br>        <mi>Q</mi><br>      </msub><br>    </mrow><br>    <mrow><br>      <msub><br>        <mi>x</mi><br>        <mi>P</mi><br>      </msub><br>      <mo>-</mo><br>      <msub><br>        <mi>x</mi><br>        <mi>Q</mi><br>      </msub><br>    </mrow><br>  </mfrac><br></math><br></center><br><br>设该直线与椭圆曲线的交点
+</strong><math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <mi>R</mi><br>  <mo>=</mo><br>  <mo stretchy="false">(</mo><br>  <msub><br>    <mi>x</mi><br>    <mi>R</mi><br>  </msub><br>  <mo>,</mo><br>  <msub><br>    <mi>y</mi><br>    <mi>R</mi><br>  </msub><br>  <mo stretchy="false">)</mo><br></math>**<br>，则有<br><br><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><br>  <mtable columnalign="right center left" rowspacing="4pt" columnspacing="1em"><br>    <mtr><br>      <mtd><br>        <msub><br>          <mi>x</mi><br>          <mi>R</mi><br>        </msub><br>      </mtd><br>      <mtd><br>        <mo>=</mo><br>      </mtd><br>      <mtd><br>        <msup><br>          <mi>m</mi><br>          <mn>2</mn><br>        </msup><br>        <mo>-</mo><br>        <msub><br>          <mi>x</mi><br>          <mi>P</mi><br>        </msub><br>        <mo>-</mo><br>        <msub><br>          <mi>x</mi><br>          <mi>Q</mi><br>        </msub><br>      </mtd><br>    </mtr><br>    <mtr><br>      <mtd><br>        <msub><br>          <mi>y</mi><br>          <mi>R</mi><br>        </msub><br>      </mtd><br>      <mtd><br>        <mo>=</mo><br>      </mtd><br>      <mtd><br>        <msub><br>          <mi>y</mi><br>          <mi>P</mi><br>        </msub><br>        <mo>+</mo><br>        <mi>m</mi><br>        <mo stretchy="false">(</mo><br>        <msub><br>          <mi>x</mi><br>          <mi>R</mi><br>        </msub><br>        <mo>-</mo><br>        <msub><br>          <mi>x</mi><br>          <mi>P</mi><br>        </msub><br>        <mo stretchy="false">)</mo><br>      </mtd><br>    </mtr><br>  </mtable><br></math>
+
+<p>（译注：</p>
+<math xmlns="http://www.w3.org/1998/Math/MathML"><br>     <msub><br>        <mi>x</mi><br>        <mi>R</mi><br>    </msub><br></math><br>由三次方程求根公式得到，<br><math xmlns="http://www.w3.org/1998/Math/MathML"><br>     <msub><br>        <mi>y</mi><br>        <mi>R</mi><br>    </msub><br></math><br>由直线斜率表达式得到<br>）或者写为：<br><br><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><br>  <msub><br>    <mi>y</mi><br>    <mi>R</mi><br>  </msub><br>  <mo>=</mo><br>  <msub><br>    <mi>y</mi><br>    <mi>Q</mi><br>  </msub><br>  <mo>+</mo><br>  <mi>m</mi><br>  <mo stretchy="false">(</mo><br>  <msub><br>    <mi>x</mi><br>    <mi>R</mi><br>  </msub><br>  <mo>-</mo><br>  <msub><br>    <mi>x</mi><br>    <mi>Q</mi><br>  </msub><br>  <mo stretchy="false">)</mo><br></math>
+
+<p>因而：</p>
+<math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <mo stretchy="false">(</mo><br>  <msub><br>    <mi>x</mi><br>    <mi>P</mi><br>  </msub><br>  <mo>,</mo><br>  <msub><br>    <mi>y</mi><br>    <mi>P</mi><br>  </msub><br>  <mo stretchy="false">)</mo><br>  <mo>+</mo><br>  <mo stretchy="false">(</mo><br>  <msub><br>    <mi>x</mi><br>    <mi>Q</mi><br>  </msub><br>  <mo>,</mo><br>  <msub><br>    <mi>y</mi><br>    <mi>Q</mi><br>  </msub><br>  <mo stretchy="false">)</mo><br>  <mo>=</mo><br>  <mo stretchy="false">(</mo><br>  <msub><br>    <mi>x</mi><br>    <mi>R</mi><br>  </msub><br>  <mo>,</mo><br>  <mo>-</mo><br>  <msub><br>    <mi>y</mi><br>    <mi>R</mi><br>  </msub><br>  <mo stretchy="false">)</mo><br></math><br>（注意符号）。<br><br>如果我们想检验这个结果，只需要看R是否在曲线上，并且P、Q、R是否共线即可。然而检查R是否在曲线上要解三次方程，太麻烦。而我又提供了一个<a href="https://cdn.rawgit.com/andreacorbellini/ecc/920b29a/interactive/reals-add.html" target="_blank" rel="external">工具</a>，来计算R在曲线上的位置。有兴趣的同学可以自己玩一下试试。<br><br>以上的方程当<br><strong><math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <mi>P</mi><br>  <mo>=</mo><br>  <mi>Q</mi><br></math></strong><br>的时候需要做一些调整。因为此时斜率表达式的分母为0。我们可以对曲线求导得到斜率m的表达式为：<br><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><br>  <mi>m</mi><br>  <mo>=</mo><br>  <mfrac><br>    <mrow><br>      <mn>3</mn><br>      <msubsup><br>        <mi>x</mi><br>        <mi>P</mi><br>        <mn>2</mn><br>      </msubsup><br>      <mo>+</mo><br>      <mi>a</mi><br>    </mrow><br>    <mrow><br>      <mn>2</mn><br>      <msub><br>        <mi>y</mi><br>        <mi>P</mi><br>      </msub><br>    </mrow><br>  </mfrac><br></math>
+
+<p>使用这个公式计算出的点R同样可以使用上面提到的工具去验证。</p>
+<p><br></p>
+<h2>标量乘法</h2>
+
+<p>除了加法，我们还需要定义一种标量乘法：</p>
+<math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><br>  <mi>n</mi><br>  <mi>P</mi><br>  <mo>=</mo><br>  <munder><br>    <mrow class="MJX-TeXAtom-OP MJX-fixedlimits"><br>      <munder><br>        <mrow><br>          <mi>P</mi><br>          <mo>+</mo><br>          <mi>P</mi><br>          <mo>+</mo><br>          <mo>&#x22EF;<!-- ⋯ --></mo><br>          <mo>+</mo><br>          <mi>P</mi><br>        </mrow><br>        <mo width="200">&#x23DF;<!-- ⏟ --></mo><br>      </munder><br>    </mrow><br>    <mrow class="MJX-TeXAtom-ORD"><br>      <mi>n</mi><br>      <mtext>&#xA0;</mtext><br>      <mtext>times</mtext><br>    </mrow><br>  </munder><br></math>
+
+<p>其中n是自然数。我为标量乘法的演示也提供了一个<a href="https://cdn.rawgit.com/andreacorbellini/ecc/920b29a/interactive/reals-mul.html" target="_blank" rel="external">在线工具</a>。</p>
+<p>在这种形式下，计算nP似乎需要n次加法。如果n有k位，则算法复杂度为</p>
+<p><math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <mi>O</mi><br>  <mo stretchy="false">(</mo><br>  <msup><br>    <mn>2</mn><br>    <mi>k</mi><br>  </msup><br>  <mo stretchy="false">)</mo><br></math><br>，看起来并不怎么样。但是其实有更好的算法。</p>
+<p>其中一个叫做double and add算法，它的原理可以用一个如下的例子进行解释：例如n=151，它的2进制表达式为</p>
+<p><math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <semantics><br>    <msub><br>      <mn>10010111</mn><br>      <mn>2</mn><br>    </msub><br>    <annotation encoding="application/x-tex">10010111_2</annotation><br>  </semantics><br></math><br>，这个2进制的表达式可以写成以2为底的指数的多项式和：</p>
+<p><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><br>  <semantics><br>    <mtable columnalign="right center left" rowspacing="4pt" columnspacing="1em"><br>      <mtr><br>        <mtd><br>          <mn>151</mn><br>        </mtd><br>        <mtd><br>          <mo>=</mo><br>        </mtd><br>        <mtd><br>          <mn>1</mn><br>          <mo>&#x22C5;<!-- ⋅ --></mo><br>          <msup><br>            <mn>2</mn><br>            <mn>7</mn><br>          </msup><br>          <mo>+</mo><br>          <mn>0</mn><br>          <mo>&#x22C5;<!-- ⋅ --></mo><br>          <msup><br>            <mn>2</mn><br>            <mn>6</mn><br>          </msup><br>          <mo>+</mo><br>          <mn>0</mn><br>          <mo>&#x22C5;<!-- ⋅ --></mo><br>          <msup><br>            <mn>2</mn><br>            <mn>5</mn><br>          </msup><br>          <mo>+</mo><br>          <mn>1</mn><br>          <mo>&#x22C5;<!-- ⋅ --></mo><br>          <msup><br>            <mn>2</mn><br>            <mn>4</mn><br>          </msup><br>          <mo>+</mo><br>          <mn>0</mn><br>          <mo>&#x22C5;<!-- ⋅ --></mo><br>          <msup><br>            <mn>2</mn><br>            <mn>3</mn><br>          </msup><br>          <mo>+</mo><br>          <mn>1</mn><br>          <mo>&#x22C5;<!-- ⋅ --></mo><br>          <msup><br>            <mn>2</mn><br>            <mn>2</mn><br>          </msup><br>          <mo>+</mo><br>          <mn>1</mn><br>          <mo>&#x22C5;<!-- ⋅ --></mo><br>          <msup><br>            <mn>2</mn><br>            <mn>1</mn><br>          </msup><br>          <mo>+</mo><br>          <mn>1</mn><br>          <mo>&#x22C5;<!-- ⋅ --></mo><br>          <msup><br>            <mn>2</mn><br>            <mn>0</mn><br>          </msup><br>        </mtd><br>      </mtr><br>      <mtr><br>        <mtd><br>        <mtd><br>          <mo>=</mo><br>        </mtd><br>        <mtd><br>          <msup><br>            <mn>2</mn><br>            <mn>7</mn><br>          </msup><br>          <mo>+</mo><br>          <msup><br>            <mn>2</mn><br>            <mn>4</mn><br>          </msup><br>          <mo>+</mo><br>          <msup><br>            <mn>2</mn><br>            <mn>2</mn><br>          </msup><br>          <mo>+</mo><br>          <msup><br>            <mn>2</mn><br>            <mn>1</mn><br>          </msup><br>          <mo>+</mo><br>          <msup><br>            <mn>2</mn><br>            <mn>0</mn><br>          </msup><br>        </mtd><br>      </mtd></mtr><br>    </mtable><br>    <annotation encoding="application/x-tex">\begin{array}{rcl}<br>    151 &amp; = &amp; 1 \cdot 2^7 + 0 \cdot 2^6 + 0 \cdot 2^5 + 1 \cdot 2^4 + 0 \cdot 2^3 + 1 \cdot 2^2 + 1 \cdot 2^1 + 1 \cdot 2^0 \<br>    &amp; = 2^7 + 2^4 + 2^2 + 2^1 + 2^0<br>\end{array}</annotation><br>  </semantics><br></math><br>这样，便有：</p>
+<p><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><br>  <semantics><br>    <mrow><br>      <mn>151</mn><br>      <mo>⋅</mo><br>      <mi>P</mi><br>      <mo>=</mo><br>      <msup><br>        <mn>2</mn><br>        <mn>7</mn><br>      </msup><br>      <mi>P</mi><br>      <mo>+</mo><br>      <msup><br>        <mn>2</mn><br>        <mn>4</mn><br>      </msup><br>      <mi>P</mi><br>      <mo>+</mo><br>      <msup><br>        <mn>2</mn><br>        <mn>2</mn><br>      </msup><br>      <mi>P</mi><br>      <mo>+</mo><br>      <msup><br>        <mn>2</mn><br>        <mn>1</mn><br>      </msup><br>      <mi>P</mi><br>      <mo>+</mo><br>      <msup><br>        <mn>2</mn><br>        <mn>0</mn><br>      </msup><br>      <mi>P</mi><br>    </mrow><br>    <annotation encoding="application/x-tex">151 \cdot P = 2^7 P + 2^4 P + 2^2 P + 2^1 P + 2^0 P</annotation><br>  </semantics><br></math><br>按照该算法的流程，可以列成如下的步骤：</p>
+<ul>
+<li>取P</li>
+<li>将P翻倍，得到2P</li>
+<li>将2P和P相加，得到<math xmlns="http://www.w3.org/1998/Math/MathML"><br><semantics><br> <mrow><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;1&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br>   <mo>+</mo><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;0&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br> </mrow><br> <annotation encoding="application/x-tex">2^1P + 2^0P</annotation><br></semantics><br></math></li>
+<li>将2P翻倍，得到<math xmlns="http://www.w3.org/1998/Math/MathML"><br><semantics><br> <mrow><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;2&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br> </mrow><br> <annotation encoding="application/x-tex">2^2P</annotation><br></semantics><br></math></li>
+<li>与上面的结果相加，得到<math xmlns="http://www.w3.org/1998/Math/MathML"><br><semantics><br> <mrow><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;2&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br>   <mo>+</mo><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;1&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br>   <mo>+</mo><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;0&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br> </mrow><br> <annotation encoding="application/x-tex">2^2P + 2^1P + 2^0P</annotation><br></semantics><br></math></li>
+<li>将<math xmlns="http://www.w3.org/1998/Math/MathML"><br><semantics><br> <mrow><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;2&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br> </mrow><br> <annotation encoding="application/x-tex">2^2P</annotation><br></semantics><br></math>翻倍，得到<math xmlns="http://www.w3.org/1998/Math/MathML"><br><semantics><br> <mrow><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;3&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br> </mrow><br> <annotation encoding="application/x-tex">2^3P</annotation><br></semantics><br></math></li>
+<li>将<math xmlns="http://www.w3.org/1998/Math/MathML"><br><semantics><br> <mrow><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;3&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br> </mrow><br> <annotation encoding="application/x-tex">2^3P</annotation><br></semantics><br></math>翻倍，得到<math xmlns="http://www.w3.org/1998/Math/MathML"><br><semantics><br> <mrow><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;4&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br> </mrow><br> <annotation encoding="application/x-tex">2^3P</annotation><br></semantics><br></math></li>
+<li>与上面的结果相加，得到<math xmlns="http://www.w3.org/1998/Math/MathML"><br><semantics><br> <mrow><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;4&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br>   <mo>+</mo><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;2&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br>   <mo>+</mo><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;1&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br>   <mo>+</mo><br>   <msup><pre><code>&lt;mn&gt;2&lt;/mn&gt;
+&lt;mn&gt;0&lt;/mn&gt;
+</code></pre>   </msup><br>   <mi>P</mi><br> </mrow><br> <annotation encoding="application/x-tex">2^4P + 2^2P + 2^1P + 2^0P</annotation><br></semantics><br></math></li>
+<li>…</li>
+</ul>
+<p>最终，我们可以通过计算7次乘法和4次加法得到<math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <semantics><br>    <mrow><br>      <mn>151</mn><br>      <mo>⋅</mo><br>      <mi>P</mi><br>    </mrow><br>    <annotation encoding="application/x-tex">151 \cdot P</annotation><br>  </semantics><br></math>的值。</p>
+<p>如果还是不够清楚的话，下面有一段python代码来说明问题：</p>
+<pre><code>def bits(n):
+    &quot;&quot;&quot;
+    Generates the binary digits of n, starting
+    from the least significant bit.
+
+    bits(151) -&gt; 1, 1, 1, 0, 1, 0, 0, 1
+    &quot;&quot;&quot;
+    while n:
+        yield n &amp; 1
+        n &gt;&gt;= 1
+
+def double_and_add(n, x):
+    &quot;&quot;&quot;
+    Returns the result of n * x, computed using
+    the double and add algorithm.
+    &quot;&quot;&quot;
+    result = 0
+    addend = x
+
+    for bit in bits(n):
+        if bit == 1:
+            result += addend
+        addend *= 2
+
+    return result
+</code></pre><p>假如加法和乘法的操作的时间复杂度是O(1)，那么该算法的时间复杂度为O(logn)，或者O(k)，显然比刚刚的O(n)好多了。</p>
+<p><br></p>
+<p></p><h2>对数</h2><br>给出n和P，我们现在起码有一个多项式时间的算法来计算<math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <semantics><br>    <mrow><br>      <mi>Q</mi><br>      <mo>=</mo><br>      <mi>n</mi><br>      <mi>P</mi><br>    </mrow><br>    <annotation encoding="application/x-tex">Q = nP</annotation><br>  </semantics><br></math><br>。但是反过来，当我们知道Q和P，要计算n的时候怎么办？这个问题被称作“对数”问题而不是“除法”问题，是为了和密码学的其它定义保持一致。<p></p>
+<p>我并不知道任何“简单”的算法，来计算对数问题。然而反过来，如果做乘法/乘方计算，则有一些固定的套路。 例如，对于椭圆曲线<math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <semantics><br>    <mrow><br>      <msup><br>        <mi>y</mi><br>        <mn>2</mn><br>      </msup><br>      <mo>=</mo><br>      <msup><br>        <mi>x</mi><br>        <mn>3</mn><br>      </msup><br>      <mo> − </mo><br>      <mn>3</mn><br>      <mi>x</mi><br>      <mo>+</mo><br>      <mn>1</mn><br>    </mrow><br>    <annotation encoding="application/x-tex">y^2 = x^3 - 3x + 1</annotation><br>  </semantics><br></math><br>和点<math xmlns="http://www.w3.org/1998/Math/MathML"><br>  <semantics><br>    <mrow><br>      <mi>P</mi><br>      <mo>=</mo><br>      <mo stretchy="false">(</mo><br>      <mn>0</mn><br>      <mo>,</mo><br>      <mn>1</mn><br>      <mo stretchy="false">)</mo><br>    </mrow><br>    <annotation encoding="application/x-tex">P = (0, 1)</annotation><br>  </semantics><br></math>，我们可以很快知道当n为奇数时，nP落在曲线的左半边；当n为偶数时，nP落在曲线的右半边。如果我们尝试的次数足够多，我们会发现更多的规律，并最终从中找出一些算法通过计算机计算这些问题。</p>
+<p>对于对数问题有一个变体：离散对数问题。在下一篇中我们会看到，如果我们减少椭圆曲线的域，数乘计算依然是“简单”的，而离散对数的计算则变成了一个“困难”的问题。这个特性就是椭圆曲线密码学的关键原理。</p>
+</div><div class="article-meta" style="max-width:800px"></div><ul class="navication"><li class="home"><a href="/"><i class="icon icon-home"></i></a></li><li><a href="/2017/03/30/Swift-shell/"><i class="icon icon-arror-left"></i></a></li><li><a href="/2017/05/10/URLEncoding/"><i class="icon icon-arror-right"></i></a></li></ul><div class="page-footer"><div class="top"><ul class="social"><li><a title="Github" target="_blank"><i class="icon icon-github"></i></a></li></ul></div><div class="bottom"><p class="copyright">© 2017 This is a Blog!<br><small>POWER BY <a href="https://hexo.io" target="_blank">HEXO</a></small></p></div></div></div><script>var wrap = document.getElementById('wrap');
+window.onload = function () {
+  wrap.className += ' done';
+}</script></body></html>

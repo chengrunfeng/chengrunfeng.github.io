@@ -1,0 +1,28 @@
+<!DOCTYPE html><html lang="zh-cn"><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=Edge"><meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no"><meta name="format-detection" content="telephone=no"><meta name="format-detection" content="email=no"><meta name="description"><meta name="keywords" content="Hexo, Gruntjs, Nodejs, Reactjs, Vuejs"><title>使用Swift脚本执行shell命令 - This is a Blog!</title><link rel="stylesheet" href="/css/main_style.min.css"><link rel="icon" href="/apple.ico"></head><body><input id="navi" type="checkbox"><ul class="main-navication"><li><a href="/"><span>Home</span></a></li><li><a href="https://github.com"><span>Github</span></a></li><li><a href="https://www.v2ex.com/"><span>V2EX</span></a></li></ul><div class="wrapper" id="wrap"><div class="post-header"><label class="navi-button" for="navi">MENU</label><img class="background" src="http://callfiles.ueibo.com/hexo-theme-laughing/post_background.jpg"><div class="post-title"><h1 class="title">使用Swift脚本执行shell命令</h1><ul class="meta"><li><i class="icon icon-author"></i>Canymebee</li><li><i class="icon icon-clock"></i>1 Minutes</li><li><i class="icon icon-calendar"></i>2017年3月30日</li></ul></div></div><div class="article-content" style="max-width:800px"><p>环境：Xcode8.3 macOS10.12.4 Swift3</p>
+<pre><code>import Foundation
+
+@discardableResult
+func shell(_ args: [String]) -&gt; String {
+    let task = Process()
+    task.launchPath = &quot;/usr/bin/env&quot;
+    task.arguments = args
+
+    let pipe = Pipe()
+    task.standardOutput = pipe
+    task.launch()
+    task.waitUntilExit()
+
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    let output: String = NSString(data: data, encoding: String.Encoding.utf8.rawValue)! as String
+
+    return output;
+}
+
+print(shell([&quot;ls&quot;, &quot;-al&quot;]));
+</code></pre><p>其中，<a href="https://developer.apple.com/reference/foundation/process" target="_blank" rel="external">Process</a>类可以用来打开另外一个子进程，并监控其运行情况。这个类在OC里面应该叫NSTask，后面好像是Swift3改名成Process。</p>
+<p>env这个命令可以用于打印本机上所有的环境变量；也可以用于执行shell命令，如果你接了参数的话。这里就用它来执行输入的命令。</p>
+<p><a href="https://developer.apple.com/reference/foundation/pipe" target="_blank" rel="external">Pipe</a>这个类就是操作系统的管道啦，在这里用来接受子进程的输出。</p>
+</div><div class="article-meta" style="max-width:800px"></div><ul class="navication"><li class="home"><a href="/"><i class="icon icon-home"></i></a></li><li><a href="/2016/08/29/hello-world/"><i class="icon icon-arror-left"></i></a></li><li><a href="/2017/04/09/ecc1/"><i class="icon icon-arror-right"></i></a></li></ul><div class="page-footer"><div class="top"><ul class="social"><li><a title="Github" target="_blank"><i class="icon icon-github"></i></a></li></ul></div><div class="bottom"><p class="copyright">© 2017 This is a Blog!<br><small>POWER BY <a href="https://hexo.io" target="_blank">HEXO</a></small></p></div></div></div><script>var wrap = document.getElementById('wrap');
+window.onload = function () {
+  wrap.className += ' done';
+}</script></body></html>
